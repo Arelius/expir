@@ -97,6 +97,30 @@ int main(int argc, const char** argv)
 
     {
         expir_int int1 = {EXPIR_int, 1};
+        expir_binary_op add = {EXPIR_binary_op, EXPIR_add, (expir_expression*)&int1, (expir_expression*)&int1};
+        expir_binary_op add2 = {EXPIR_binary_op, EXPIR_add, (expir_expression*)&add, (expir_expression*)&int1};
+        test(
+            "left associative +",
+            expir_cmp(
+                expir_parse("1 + 1 + 1", &alloc),
+                (expir_expression*)&add2));
+    }
+
+    {
+        expir_int int2 = {EXPIR_int, 2};
+        expir_int int3 = {EXPIR_int, 3};
+        expir_int int4 = {EXPIR_int, 4};
+        expir_binary_op pow = {EXPIR_binary_op, EXPIR_pow, (expir_expression*)&int3, (expir_expression*)&int4};
+        expir_binary_op pow2 = {EXPIR_binary_op, EXPIR_pow, (expir_expression*)&int2, (expir_expression*)&pow};
+        test(
+            "right associative ^",
+            expir_cmp(
+                expir_parse("2 ^ 3 ^ 4", &alloc),
+                (expir_expression*)&pow2));
+    }
+
+    {
+        expir_int int1 = {EXPIR_int, 1};
         expir_binary_op mul = {EXPIR_binary_op, EXPIR_mul, (expir_expression*)&int1, (expir_expression*)&int1};
         expir_binary_op add = {EXPIR_binary_op, EXPIR_add, (expir_expression*)&int1, (expir_expression*)&mul};
         test(
@@ -115,9 +139,6 @@ int main(int argc, const char** argv)
             expir_cmp(
                 expir_parse("1 * 1 + 1", &alloc),
                 (expir_expression*)&add));
-
-        print_expr(expir_parse("1 * 1 + 1", &alloc));
-        print_expr((expir_expression*)&add);
     }
 
     printf("TEST %s. %d tests, %d failures.\n", (failedTests == 0) ? "SUCCESS" : "FAILURE", testNum, failedTests);

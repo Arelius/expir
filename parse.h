@@ -15,9 +15,10 @@ enum ExpirType
     EXPIR_binary_op
 };
 
+// Matches op_precedence and op_binding layout.
 enum ExpirBinaryOp
 {
-    EXPIR_add,
+    EXPIR_add = 0,
     EXPIR_sub,
     EXPIR_mul,
     EXPIR_div,

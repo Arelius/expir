@@ -1,6 +1,29 @@
 #include "parse.h"
 #include <stdio.h>
 
+static unsigned int op_precedence[] =
+{
+    10,
+    10,
+    20,
+    20,
+    20,
+    40
+};
+
+static const unsigned int bind_left = 1;
+static const unsigned int bind_right = 0;
+
+static unsigned int op_binding[] =
+{
+    bind_left,
+    bind_left,
+    bind_left,
+    bind_left,
+    bind_left,
+    bind_right
+};
+
 struct parse_state
 {
     expir_expression* token;
@@ -121,7 +144,9 @@ static expir_expression* consume_token(const char** src, expir_allocator* alloc,
     return ret;
 }
 
-expir_expression* expir_parse_expr(const char** src, expir_allocator* alloc, parse_state* parse)
+
+
+expir_expression* expir_parse_expr(const char** src, expir_allocator* alloc, parse_state* parse, unsigned int prec)
 {
     expir_expression* expr = nullptr;
     while(parse->token) {
@@ -135,9 +160,11 @@ expir_expression* expir_parse_expr(const char** src, expir_allocator* alloc, par
         case EXPIR_binary_op:
         {
             expir_binary_op* op = (expir_binary_op*)parse->token;
+            if(prec > op_precedence[op->op])
+                return expr;
             op->left = expr;
             expr = consume_token(src, alloc, parse);
-            op->right = expir_parse_expr(src, alloc, parse);
+            op->right = expir_parse_expr(src, alloc, parse, op_precedence[op->op] + op_binding[op->op]);
             break;
         }
         default:
@@ -157,7 +184,7 @@ expir_expression* expir_parse(const char* src, expir_allocator* alloc)
 
     expir_expression* root = nullptr;
 
-    root = expir_parse_expr(&src, alloc, &parse);
+    root = expir_parse_expr(&src, alloc, &parse, 0);
 
     if(parse.error) {
         return nullptr;
