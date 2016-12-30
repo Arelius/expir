@@ -24,9 +24,38 @@ static unsigned int op_binding[] =
     bind_right
 };
 
+enum ExpirToken
+{
+    TOK_fail = 0,
+    TOK_int,
+    TOK_float,
+    // corresponds to ExpirBinaryOp
+    TOK_plus,
+    TOK_minus,
+    TOK_star,
+    TOK_slash,
+    TOK_percent,
+    TOK_caret
+};
+
+static ExpirBinaryOp TokToBinaryOp(ExpirToken tok)
+{
+    return (ExpirBinaryOp)(EXPIR_add + (tok - TOK_plus));
+}
+
+struct token_value
+{
+    union
+    {
+        int intValue;
+        float floatValue;
+    };
+};
+
 struct parse_state
 {
-    expir_expression* token;
+    ExpirToken token;
+    token_value value;
     const char* start;
     bool error;
 };
@@ -70,7 +99,7 @@ static void consume_whitespace(const char** src)
         (*src)++;  
 }
 
-static expir_expression* tokenize_number(const char** src, expir_allocator* alloc, parse_state* parse)
+static ExpirToken tokenize_number(const char** src, token_value* outValue, expir_allocator* alloc, parse_state* parse)
 {
     int ival = 0;
     while(is_number(**src)) {
@@ -78,92 +107,106 @@ static expir_expression* tokenize_number(const char** src, expir_allocator* allo
         ival = ival * 10 + i;
         (*src)++;
     }
-    expir_int* expr = (expir_int*)alloc->alloc(sizeof(expir_int));
-    *expr = {EXPIR_int, ival};
-    return (expir_expression*)expr;
+    outValue->intValue = ival;
+    return TOK_int;
 }
 
-static expir_expression* tokenize_operator(const char** src, expir_allocator* alloc, parse_state* parse)
+static ExpirToken tokenize_operator(const char** src, token_value* outValue, expir_allocator* alloc, parse_state* parse)
 {
     char c = **src;
     (*src)++;
-    ExpirBinaryOp op;
+    ExpirToken tok;
     switch(c) {
     case '+':
-        op = EXPIR_add;
+        tok = TOK_plus;
         //if(*src == '+') ++
         break;
     case '-':
-        op = EXPIR_sub;
+        tok = TOK_minus;
         //if(*src == '-') --
         break;
     case '*':
-        op = EXPIR_mul;
+        tok = TOK_star;
         break;
     case '/':
-        op = EXPIR_div;
+        tok = TOK_slash;
         break;
     case '%':
-        op = EXPIR_mod;
+        tok = TOK_percent;
         break;
     case '^':
-        op = EXPIR_pow;
+        tok = TOK_caret;
         break;
     default:
         parse_error(parse, "Expected operator");
     }
-    expir_binary_op* expr = (expir_binary_op*)alloc->alloc(sizeof(expir_binary_op));
-    *expr = {EXPIR_binary_op, op, nullptr, nullptr};
-    return (expir_expression*)expr;
+    return tok;
 }
 
-static expir_expression* tokenize(const char** src, expir_allocator* alloc, parse_state* parse)
+static ExpirToken tokenize(const char** src, token_value* outValue, expir_allocator* alloc, parse_state* parse)
 {
     const char* c = *src;
     consume_whitespace(src);
 
     if(is_number(**src)) {
-        return tokenize_number(src, alloc, parse);
+        return tokenize_number(src, outValue, alloc, parse);
     }
     else if(is_operator(**src)) {
-        return tokenize_operator(src, alloc, parse);
+        return tokenize_operator(src, outValue, alloc, parse);
     }
     else if(**src == '\0') {
-        return nullptr;
+        return TOK_fail;
     }
     else {
         parse_error(parse, "Unexpected character");
-        return nullptr;
+        return TOK_fail;
     }
 }
 
-static expir_expression* consume_token(const char** src, expir_allocator* alloc, parse_state* state)
+static ExpirToken consume_token(const char** src, expir_allocator* alloc, parse_state* state)
 {
-    expir_expression* ret = state->token;
-    state->token = tokenize(src, alloc, state);
+    ExpirToken ret = state->token;
+    token_value value = {};
+    state->token = tokenize(src, &value, alloc, state);
+    state->value = value;
     return ret;
 }
-
-
 
 expir_expression* expir_parse_expr(const char** src, expir_allocator* alloc, parse_state* parse, unsigned int prec)
 {
     expir_expression* expr = nullptr;
     while(parse->token) {
-        switch(parse->token->type) {
-        case EXPIR_int:
-        case EXPIR_float:
+        switch(parse->token) {
+        case TOK_int:
         {
-            expr = consume_token(src, alloc, parse);
+            expir_int* iexpr = (expir_int*)alloc->alloc(sizeof(expir_int));
+            *iexpr = {EXPIR_int, parse->value.intValue};
+            expr = (expir_expression*)iexpr;
+            consume_token(src, alloc, parse);
             break;
         }
-        case EXPIR_binary_op:
+        case TOK_float:
         {
-            expir_binary_op* op = (expir_binary_op*)parse->token;
+            expir_float* fexpr = (expir_float*)alloc->alloc(sizeof(expir_float));
+            *fexpr = {EXPIR_float, parse->value.floatValue};
+            expr = (expir_expression*)fexpr;
+            consume_token(src, alloc, parse);
+            break;
+        }
+        case TOK_plus:
+        case TOK_minus:
+        case TOK_star:
+        case TOK_slash:
+        case TOK_percent:
+        case TOK_caret:
+        {
+            expir_binary_op* op = (expir_binary_op*)alloc->alloc(sizeof(expir_binary_op));
+            *op = {EXPIR_binary_op, TokToBinaryOp(parse->token), nullptr, nullptr};
             if(prec > op_precedence[op->op])
                 return expr;
             op->left = expr;
-            expr = consume_token(src, alloc, parse);
+            expr = (expir_expression*)op;
+            consume_token(src, alloc, parse);
             op->right = expir_parse_expr(src, alloc, parse, op_precedence[op->op] + op_binding[op->op]);
             break;
         }
@@ -179,7 +222,7 @@ expir_expression* expir_parse_expr(const char** src, expir_allocator* alloc, par
 
 expir_expression* expir_parse(const char* src, expir_allocator* alloc)
 {
-    parse_state parse = {nullptr, src, false};
+    parse_state parse = {TOK_fail, 0, src, false};
     consume_token(&src, alloc, &parse);
 
     expir_expression* root = nullptr;
