@@ -107,8 +107,24 @@ static ExpirToken tokenize_number(const char** src, token_value* outValue, expir
         ival = ival * 10 + i;
         (*src)++;
     }
-    outValue->intValue = ival;
-    return TOK_int;
+    if(**src == '.') {
+        (*src)++;
+        //TODO: I doubt the percision of this.
+        int num = 0;
+        int denom = 1;
+        while(is_number(**src)) {
+            int i = (**src) - '0';
+            num = num * 10 + i;
+            denom = denom * 10;
+            (*src)++;
+        }
+        outValue->floatValue = ival + (float)num / (float)denom;
+        return TOK_float;
+    }
+    else {
+        outValue->intValue = ival;
+        return TOK_int;
+    }
 }
 
 static ExpirToken tokenize_operator(const char** src, token_value* outValue, expir_allocator* alloc, parse_state* parse)
@@ -247,6 +263,8 @@ bool expir_cmp(expir_expression* a, expir_expression* b)
     switch(a->type) {
     case EXPIR_int:
         return ((expir_int*)a)->value == ((expir_int*)b)->value;
+    case EXPIR_float:
+        return ((expir_float*)a)->value == ((expir_float*)b)->value;
     case EXPIR_binary_op:
         if(((expir_binary_op*)a)->op != ((expir_binary_op*)b)->op)
             return false;

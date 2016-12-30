@@ -76,6 +76,24 @@ int main(int argc, const char** argv)
     }
 
     {
+        expir_int int198 = {EXPIR_int, 198};
+        test(
+            "198",
+            expir_cmp(
+                expir_parse("198", &alloc),
+                (expir_expression*)&int198));
+    }
+
+    {
+        expir_float float6dot54 = {EXPIR_float, 6.54};
+        test(
+            "6.54",
+             expir_cmp(
+                expir_parse("6.54", &alloc),
+                (expir_expression*)&float6dot54));
+    }
+
+    {
         expir_int int1 = {EXPIR_int, 1};
         expir_unary_op neg = {EXPIR_unary_op, EXPIR_neg, (expir_expression*)&int1};
         test(
