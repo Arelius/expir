@@ -85,7 +85,7 @@ int main(int argc, const char** argv)
     }
 
     {
-        expir_float float6dot54 = {EXPIR_float, 6.54};
+        expir_float float6dot54 = {EXPIR_float, 6.54f};
         test(
             "6.54",
              expir_cmp(
@@ -157,6 +157,39 @@ int main(int argc, const char** argv)
             expir_cmp(
                 expir_parse("1 * 1 + 1", &alloc),
                 (expir_expression*)&add));
+    }
+
+    {
+        expir_int int1 = {EXPIR_int, 1};
+        expir_binary_op add = {EXPIR_binary_op, EXPIR_add, (expir_expression*)&int1, (expir_expression*)&int1};
+        expir_binary_op add2 = {EXPIR_binary_op, EXPIR_add, (expir_expression*)&add, (expir_expression*)&int1};
+        test(
+            "(1) + 1 + 1",
+            expir_cmp(
+                expir_parse("(1) + 1 + 1", &alloc),
+                (expir_expression*)&add2));
+    }
+
+    {
+        expir_int int1 = {EXPIR_int, 1};
+        expir_binary_op add = {EXPIR_binary_op, EXPIR_add, (expir_expression*)&int1, (expir_expression*)&int1};
+        expir_binary_op add2 = {EXPIR_binary_op, EXPIR_add, (expir_expression*)&add, (expir_expression*)&int1};
+        test(
+            "(1 + 1) + 1",
+            expir_cmp(
+                expir_parse("(1 + 1) + 1", &alloc),
+                (expir_expression*)&add2));
+    }
+
+    {
+        expir_int int1 = {EXPIR_int, 1};
+        expir_binary_op add = {EXPIR_binary_op, EXPIR_add, (expir_expression*)&int1, (expir_expression*)&int1};
+        expir_binary_op add2 = {EXPIR_binary_op, EXPIR_add, (expir_expression*)&int1, (expir_expression*)&add};
+        test(
+            "1 + (1 + 1)",
+            expir_cmp(
+                expir_parse("1 + (1 + 1)", &alloc),
+                (expir_expression*)&add2));
     }
 
     printf("TEST %s. %d tests, %d failures.\n", (failedTests == 0) ? "SUCCESS" : "FAILURE", testNum, failedTests);

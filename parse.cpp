@@ -1,5 +1,6 @@
 #include "parse.h"
 #include <stdio.h>
+#include <stdarg.h>
 
 static unsigned int op_precedence[] =
 {
@@ -29,14 +30,44 @@ enum ExpirToken
     TOK_fail = 0,
     TOK_int,
     TOK_float,
+    TOK_openparen,
+    TOK_closeparen,
     // corresponds to ExpirBinaryOp
     TOK_plus,
     TOK_minus,
     TOK_star,
     TOK_slash,
     TOK_percent,
-    TOK_caret
+    TOK_caret,
 };
+
+const char* TokToDiagStr(ExpirToken tok)
+{
+    switch(tok) {
+    case TOK_int:
+        return "int";
+    case TOK_float:
+        return "float";
+    case TOK_openparen:
+        return "'('";
+    case TOK_closeparen:
+        return "')'";
+    case TOK_plus:
+        return "'+'";
+    case TOK_minus:
+        return "'-'";
+    case TOK_star:
+        return "'*'";
+    case TOK_slash:
+        return "'/'";
+    case TOK_percent:
+        return "'*'";
+    case TOK_caret:
+        return "'^'";
+    default:
+        return "Unknown Token";
+    }
+}
 
 static ExpirBinaryOp TokToBinaryOp(ExpirToken tok)
 {
@@ -60,10 +91,13 @@ struct parse_state
     bool error;
 };
 
-static void parse_error(parse_state* parse, const char* errstr)
+static void parse_error(parse_state* parse, const char* errstr, ...)
 {
     //TODO
-    printf(errstr);
+    va_list args;
+    va_start(args, errstr);
+    vprintf(errstr, args);
+    va_end(args);
     putc('\n', stdout);
     parse->error = true;
 }
@@ -167,6 +201,14 @@ static ExpirToken tokenize(const char** src, token_value* outValue, expir_alloca
     if(is_number(**src)) {
         return tokenize_number(src, outValue, alloc, parse);
     }
+    else if(**src == '(') {
+        (*src)++;
+        return TOK_openparen;
+    }
+    else if(**src == ')') {
+        (*src)++;
+        return TOK_closeparen;
+    }
     else if(is_operator(**src)) {
         return tokenize_operator(src, outValue, alloc, parse);
     }
@@ -197,6 +239,7 @@ expir_expression* expir_parse_expr(const char** src, expir_allocator* alloc, par
         {
             expir_int* iexpr = (expir_int*)alloc->alloc(sizeof(expir_int));
             *iexpr = {EXPIR_int, parse->value.intValue};
+            if(expr != nullptr) parse_error(parse, "Unexpected %s", TokToDiagStr(parse->token));
             expr = (expir_expression*)iexpr;
             consume_token(src, alloc, parse);
             break;
@@ -205,10 +248,28 @@ expir_expression* expir_parse_expr(const char** src, expir_allocator* alloc, par
         {
             expir_float* fexpr = (expir_float*)alloc->alloc(sizeof(expir_float));
             *fexpr = {EXPIR_float, parse->value.floatValue};
+            if(expr != nullptr) parse_error(parse, "Unexpected %s", TokToDiagStr(parse->token));
             expr = (expir_expression*)fexpr;
             consume_token(src, alloc, parse);
             break;
         }
+        case TOK_openparen:
+        {
+            if(expr != nullptr) parse_error(parse, "Unexpected %s", TokToDiagStr(parse->token));
+            consume_token(src, alloc, parse);
+            expr = expir_parse_expr(src, alloc, parse, 0);
+            if(expr == nullptr)
+                 parse_error(parse, "Empty block '()' unexpected", TokToDiagStr(parse->token));
+            if(parse->token == TOK_closeparen) {
+                consume_token(src, alloc, parse);
+            }
+            else {
+                parse_error(parse, "Expected ')' got %s", TokToDiagStr(parse->token));
+            }
+            break;
+        }
+        case TOK_closeparen:
+            return expr;
         case TOK_plus:
         case TOK_minus:
         case TOK_star:
